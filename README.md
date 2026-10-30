@@ -3,59 +3,72 @@
 A hands-on lab for Linux troubleshooting, incident recovery and operational
 improvements using Python, Nginx and Docker Compose.
 
-The focus is on reproducing failures, investigating evidence, restoring
-service and improving application behavior.
-
-## Current environment
+## Environment
 
 - Python HTTP application with `/` and `/health` endpoints.
-- Nginx reverse proxy forwarding requests to the application.
-- Docker Compose with an application healthcheck and startup dependencies.
-- Application container running as a non-root user.
-- Explicit SIGTERM and SIGINT handling for controlled process shutdown.
+- Nginx reverse proxy accessible at `127.0.0.1:8088`.
+- Application healthcheck and startup dependencies managed by Compose.
+- Non-root application container with SIGTERM and SIGINT handling.
 
-Nginx is accessible at `127.0.0.1:8088` on the machine running Docker.
 The Python application listens on port 8000 inside the Compose network.
 
-## Run the lab
+## Run locally
 
-Requirements: Git, Docker Engine and Docker Compose.
+Requirements: Git, Docker Engine, Docker Compose and Python 3 for the HTTP tests.
 
 ```bash
 git clone https://github.com/Gabrieldelacerda/cloud-operations-lab.git
 cd cloud-operations-lab
 docker compose up -d --build --wait
-```
-
-Check the services and application:
-
-```bash
 docker compose ps
 curl -i --max-time 5 http://127.0.0.1:8088/health
 ```
 
 Expected health response: HTTP 200 with `{"status": "ok"}`.
+When using a VM, execute these commands inside that VM.
 
-When running inside a VM, execute these checks inside that VM.
+## Automated tests
+
+With the environment running:
+
+```bash
+python3 tests/http_smoke.py
+bash tests/test_shutdown.sh
+```
+
+The HTTP suite checks application identity, health responses, query strings
+and unknown routes through Nginx.
+
+The shutdown suite creates isolated temporary containers and verifies
+SIGTERM and SIGINT handling, exit code 0, the OOM indicator and shutdown logs.
+Temporary containers are removed after testing.
+
+## Continuous integration
+
+[Lab Checks](https://github.com/Gabrieldelacerda/cloud-operations-lab/actions/workflows/lab-checks.yml)
+runs on pushes, pull requests and manual execution.
+
+The workflow validates Compose, builds the environment, runs both test suites
+and collects logs before cleanup.
+
+![GitHub Actions checks](screenshots/cichecks.png)
 
 ## Incident investigation
 
 [Incident 001: Backend unavailable](docs/incidents/001-backend-unavailable.md)
 
-The first controlled outage produced HTTP 504 while Nginx remained running.
-The proxy logs showed a timeout while connecting to the stopped backend.
+The original controlled outage produced HTTP 504 while Nginx remained running.
+Logs identified a connection timeout to the stopped backend. Starting the
+application restored HTTP 200 without restarting Nginx.
 
-Starting the application restored HTTP 200 without restarting Nginx.
-
-The investigation also exposed slow application shutdown. Signal handling
-was subsequently added to allow the process to exit without forced termination.
+The investigation also exposed slow shutdown, which led to explicit signal
+handling and automated shutdown tests.
 
 ## Evidence
 
-Service status and HTTP response:
-
-![Service status and HTTP 200](screenshots/composeps.png)
-
+- [Running services and HTTP 200](screenshots/composeps.png)
+- [Clean application shutdown](screenshots/CleanShutdown.png)
+- [CI test results](screenshots/citestresults.png)
 - [Docker image build](screenshots/DockerBuild.png)
 - [Environment startup](screenshots/DockerCompose.png)
 

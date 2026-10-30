@@ -2,14 +2,12 @@
 
 ## Scenario
 
-A controlled application outage was introduced by stopping the Python
-backend while leaving the Nginx reverse proxy running.
+The Python backend was intentionally stopped while Nginx remained running.
+Requests to /health through the proxy returned HTTP 504.
 
-## Impact
+## Investigation
 
-Requests to /health through Nginx returned HTTP 504 instead of HTTP 200.
-
-## Reproduction and investigation
+From the repository root:
 
 ```bash
 docker compose stop app
@@ -18,22 +16,23 @@ docker compose ps -a
 docker compose logs --tail 20 nginx
 ```
 
-## Evidence
+The original observations below predate the shutdown improvement.
+Repeating the outage with the current application can produce different
+shutdown details and proxy responses.
 
-- The application container was stopped with exit code 137.
-- The Nginx container remained running.
-- Nginx returned HTTP 504 Gateway Time-out.
-- The error log reported:
-  `upstream timed out ... while connecting to upstream`.
-- Docker inspection reported `OOMKilled=false`.
+## Original observations
+
+- Application container stopped with exit code 137 after approximately 10 seconds.
+- Docker reported `OOMKilled=false`.
+- Nginx remained running.
+- Requests returned HTTP 504 Gateway Time-out.
+- Nginx logged `upstream timed out ... while connecting to upstream`.
 
 ## Cause
 
-The backend was intentionally stopped. Nginx could not establish a
-connection to its upstream application before the connection timeout.
-
-The observed failure occurred during connection establishment, rather
-than while waiting for the application to process a request.
+Nginx could not establish a connection to the stopped backend before the
+connection timeout. The failure occurred during connection establishment,
+rather than while waiting for application processing.
 
 ## Recovery
 
@@ -43,12 +42,32 @@ docker compose ps
 curl -i --max-time 5 http://127.0.0.1:8088/health
 ```
 
-The application became healthy and Nginx returned HTTP 200 again.
-Recovery did not require restarting Nginx.
+The application became healthy and HTTP 200 returned without restarting Nginx.
 
-## Follow-up
+## Shutdown improvement
 
-Stopping the application took approximately 10 seconds and produced
-exit code 137, consistent with forced termination after the stop timeout.
+The original stop duration and exit code were consistent with forced
+termination after the Docker stop timeout.
 
-Explicit SIGTERM handling and shutdown validation remain pending.
+Explicit SIGTERM and SIGINT handling was added. The application now exits
+its request loop and closes the server when shutdown is requested.
+
+Automated tests verify both signals using temporary containers, a three-second
+stop timeout, exit code 0, `OOMKilled=false` and the clean shutdown log message.
+
+## Verification
+
+With the environment running:
+
+```bash
+python3 tests/http_smoke.py
+bash tests/test_shutdown.sh
+```
+
+Both suites also run in the GitHub Actions Lab Checks workflow.
+
+## Evidence
+
+- [Clean shutdown](../../screenshots/CleanShutdown.png)
+- [CI checks](../../screenshots/cichecks.png)
+- [CI test results](../../screenshots/citestresults.png)
