@@ -1,4 +1,5 @@
 import json
+import signal
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import urlsplit
 
@@ -26,7 +27,25 @@ class RequestHandler(BaseHTTPRequestHandler):
         self.wfile.write(body)
 
 
+def main():
+    stopping = False
+
+    def request_shutdown(_signum, _frame):
+        nonlocal stopping
+        stopping = True
+
+    signal.signal(signal.SIGTERM, request_shutdown)
+    signal.signal(signal.SIGINT, request_shutdown)
+
+    with ThreadingHTTPServer(("0.0.0.0", 8000), RequestHandler) as server:
+        server.timeout = 0.5
+        print("Application listening on port 8000", flush=True)
+
+        while not stopping:
+            server.handle_request()
+
+    print("Application stopped cleanly", flush=True)
+
+
 if __name__ == "__main__":
-    server = ThreadingHTTPServer(("0.0.0.0", 8000), RequestHandler)
-    print("Application listening on port 8000", flush=True)
-    server.serve_forever()
+    main()
