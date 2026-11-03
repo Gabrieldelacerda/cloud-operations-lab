@@ -1,20 +1,21 @@
 # Cloud Operations Lab
 
-A hands-on lab for Linux troubleshooting, incident recovery and operational
-improvements using Python, Nginx and Docker Compose.
+A local lab for investigating HTTP availability issues, documenting incident
+recovery and testing operational improvements with Python, Nginx and Docker Compose.
 
 ## Environment
 
 - Python HTTP application with `/` and `/health` endpoints.
 - Nginx reverse proxy accessible at `127.0.0.1:8088`.
-- Application healthcheck and startup dependencies managed by Compose.
+- Application healthcheck and startup dependencies configured in Compose.
 - Non-root application container with SIGTERM and SIGINT handling.
 
 The Python application listens on port 8000 inside the Compose network.
 
 ## Run locally
 
-Requirements: Git, Docker Engine, Docker Compose and Python 3 for the HTTP tests.
+Requirements: Git, Docker Engine, Docker Compose, Bash and curl.
+Python 3 is also required to run the HTTP tests.
 
 ```bash
 git clone https://github.com/Gabrieldelacerda/cloud-operations-lab.git
