@@ -28,6 +28,19 @@ curl -i --max-time 5 http://127.0.0.1:8088/health
 Expected health response: HTTP 200 with `{"status": "ok"}`.
 When using a VM, execute these commands inside that VM.
 
+## Troubleshooting
+
+Check container status, inspect recent logs and test the health endpoint:
+
+```bash
+docker compose ps
+docker compose logs --tail=100
+curl -i --max-time 5 http://127.0.0.1:8088/health
+```
+
+Use the container status, Nginx and application logs, and HTTP response together
+to investigate a failure before making changes.
+
 ## Automated tests
 
 With the environment running:
