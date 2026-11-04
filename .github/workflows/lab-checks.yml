@@ -23,7 +23,9 @@ jobs:
           persist-credentials: false
 
       - name: Validate shell script syntax
-        run: bash -n scripts/diagnose.sh tests/test_shutdown.sh
+        run: |
+          bash -n scripts/diagnose.sh
+          bash -n tests/test_shutdown.sh
 
       - name: Validate Compose configuration
         run: docker compose config --quiet
