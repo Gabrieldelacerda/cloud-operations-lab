@@ -40,3 +40,17 @@ services:
       app:
         condition: service_healthy
         restart: true
+    healthcheck:
+      test:
+        - CMD
+        - wget
+        - -q
+        - -T
+        - "2"
+        - -O
+        - /dev/null
+        - http://127.0.0.1/health
+      interval: 10s
+      timeout: 3s
+      retries: 3
+      start_period: 5s
