@@ -37,6 +37,9 @@ jobs:
       - name: Run HTTP smoke tests
         run: python3 tests/http_smoke.py
 
+      - name: Validate JSON access logs
+        run: python3 tests/test_access_logs.py
+
       - name: Test backend outage and recovery
         run: bash tests/test_recovery.sh
 
