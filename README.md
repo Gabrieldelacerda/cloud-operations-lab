@@ -7,20 +7,22 @@ recovery and testing operational improvements with Python, Nginx and Docker Comp
 
 - Python HTTP application with `/` and `/health` endpoints.
 - Nginx reverse proxy accessible at `127.0.0.1:8088`.
-- Application healthcheck and startup dependencies configured in Compose.
+- Application and proxy healthchecks with startup dependencies.
 - Non-root application container with SIGTERM and SIGINT handling.
+- Read-only application filesystem, dropped capabilities and no-new-privileges.
+- Container log rotation.
 
 The Python application listens on port 8000 inside the Compose network.
 
 ## Run locally
 
 Requirements: Git, Docker Engine, Docker Compose, Bash and curl.
-Python 3 is also required to run the HTTP tests.
+Python 3 is also required to run the HTTP and recovery tests.
 
 ```bash
 git clone https://github.com/Gabrieldelacerda/cloud-operations-lab.git
 cd cloud-operations-lab
-docker compose up -d --build --wait
+docker compose up -d --build --wait --wait-timeout 60
 docker compose ps
 curl -i --max-time 5 http://127.0.0.1:8088/health
 ```
@@ -30,16 +32,25 @@ When using a VM, execute these commands inside that VM.
 
 ## Troubleshooting
 
-Check container status, inspect recent logs and test the health endpoint:
+Collect container status, recent logs and the HTTP health response:
 
 ```bash
-docker compose ps
+bash scripts/diagnose.sh
+```
+
+For individual checks:
+
+```bash
+docker compose ps -a
 docker compose logs --tail=100
 curl -i --max-time 5 http://127.0.0.1:8088/health
 ```
 
-Use the container status, Nginx and application logs, and HTTP response together
-to investigate a failure before making changes.
+Use container status, logs and HTTP responses together to investigate a
+failure before making changes.
+
+See the [operations guide](docs/operations.md) for healthchecks, container
+restrictions, log rotation and recovery procedures.
 
 ## Automated tests
 
@@ -48,6 +59,7 @@ With the environment running:
 ```bash
 python3 tests/http_smoke.py
 bash tests/test_shutdown.sh
+bash tests/test_recovery.sh
 ```
 
 The HTTP suite checks application identity, health responses, query strings
@@ -57,15 +69,25 @@ The shutdown suite creates isolated temporary containers and verifies
 SIGTERM and SIGINT handling, exit code 0, the OOM indicator and shutdown logs.
 Temporary containers are removed after testing.
 
+The recovery suite temporarily stops the lab application, expects HTTP
+502 or 504, restores the backend and reruns the HTTP checks. It also verifies
+that Nginx was neither restarted nor replaced.
+
+The recovery test interrupts the current lab. Its exit handler attempts
+to start the application again if the test fails or is interrupted.
+See the [operations guide](docs/operations.md#test-backend-outage-and-recovery)
+for cleanup limitations and manual recovery.
+
 ## Continuous integration
 
 [Lab Checks](https://github.com/Gabrieldelacerda/cloud-operations-lab/actions/workflows/lab-checks.yml)
 runs on pushes, pull requests and manual execution.
 
-The workflow validates Compose, builds the environment, runs both test suites
+The workflow validates shell syntax and Compose configuration, builds the
+environment, runs HTTP, recovery and shutdown tests, executes diagnostics
 and collects logs before cleanup.
 
-![GitHub Actions checks](screenshots/cichecks.png)
+![GitHub Actions recovery validation](screenshots/verifylab.png)
 
 ## Incident investigation
 
@@ -76,13 +98,18 @@ Logs identified a connection timeout to the stopped backend. Starting the
 application restored HTTP 200 without restarting Nginx.
 
 The investigation also exposed slow shutdown, which led to explicit signal
-handling and automated shutdown tests.
+handling and automated shutdown tests. Backend outage and recovery are now
+tested locally and in CI.
 
 ## Evidence
 
+- [Backend outage and recovery](screenshots/testrecovery.png)
+- [Environment diagnostics in CI](screenshots/Environment_Diagnostics_CI.png)
+- [Application restrictions](screenshots/AppRestrictions.png)
+- [Healthchecks and log rotation](screenshots/HealthChecks_LogRotation.png)
 - [Running services and HTTP 200](screenshots/composeps.png)
 - [Clean application shutdown](screenshots/CleanShutdown.png)
-- [CI test results](screenshots/citestresults.png)
+- [HTTP and shutdown test results](screenshots/citestresults.png)
 - [Docker image build](screenshots/DockerBuild.png)
 - [Environment startup](screenshots/DockerCompose.png)
 
@@ -95,5 +122,6 @@ docker compose down
 ## Scope
 
 This is a local learning environment using Python's standard-library HTTP
-server. Cloud infrastructure and additional incident scenarios are planned
-extensions.
+server. Recovery is explicitly performed by the test script; the lab does
+not implement automatic failover. Cloud infrastructure and additional
+incident scenarios are planned extensions.
