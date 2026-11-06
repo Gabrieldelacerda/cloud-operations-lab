@@ -25,9 +25,13 @@ class AccessLogTests(unittest.TestCase):
 
         with response:
             self.assertEqual(response.status, expected_status)
+            request_id = response.headers.get("X-Request-ID")
+            self.assertIsNotNone(request_id)
+            self.assertRegex(request_id, r"^[0-9a-f]{32}$")
             response.read()
 
         entry = self.wait_for_entry(marker, path)
+        self.assertEqual(entry["request_id"], request_id)
         self.assertEqual(entry["method"], "GET")
         self.assertEqual(entry["uri"], path)
         self.assertIs(type(entry["status"]), int)
@@ -48,15 +52,18 @@ class AccessLogTests(unittest.TestCase):
                 self.assertTrue(math.isfinite(value))
                 self.assertGreaterEqual(value, 0)
 
+        return request_id
+
     def wait_for_entry(self, marker, path):
         deadline = time.monotonic() + 10
 
         while time.monotonic() < deadline:
+            # Larger tails omitted fresh entries on the lab's Docker Engine.
             result = subprocess.run(
                 [
                     "docker", "compose", "logs",
                     "--no-color", "--no-log-prefix",
-                    "--tail", "500", "nginx",
+                    "--tail", "100", "nginx",
                 ],
                 check=True,
                 capture_output=True,
@@ -83,6 +90,11 @@ class AccessLogTests(unittest.TestCase):
 
     def test_json_escaping(self):
         self.check_request("/health", 200, '&value="quoted"\\path')
+
+    def test_distinct_request_ids(self):
+        first = self.check_request("/health", 200)
+        second = self.check_request("/health", 200)
+        self.assertNotEqual(first, second)
 
 
 if __name__ == "__main__":
