@@ -11,13 +11,14 @@ recovery and testing operational improvements with Python, Nginx and Docker Comp
 - Non-root application container with SIGTERM and SIGINT handling.
 - Read-only application filesystem, dropped capabilities and no-new-privileges.
 - Container log rotation.
+- JSON request logs correlated across Nginx and the application using request IDs.
 
 The Python application listens on port 8000 inside the Compose network.
 
 ## Run locally
 
 Requirements: Git, Docker Engine, Docker Compose, Bash and curl.
-Python 3 is also required to run the HTTP and recovery tests.
+Python 3 is also required for the HTTP, log-correlation and recovery tests.
 
 ```bash
 git clone https://github.com/Gabrieldelacerda/cloud-operations-lab.git
@@ -52,18 +53,42 @@ failure before making changes.
 See the [operations guide](docs/operations.md) for healthchecks, container
 restrictions, log rotation and recovery procedures.
 
+## Request correlation
+
+Nginx returns an `X-Request-ID` response header and forwards the generated
+ID to the application. Both services record it in their JSON request logs.
+
+```bash
+curl --silent --show-error --include --write-out '\n' \
+  'http://127.0.0.1:8088/health?source=correlation'
+docker compose logs --no-color --no-log-prefix --tail 100 nginx
+docker compose logs --no-color --no-log-prefix --tail 100 app
+```
+
+Match the response header to the `request_id` in both logs.
+Direct application healthchecks bypass Nginx and have a null request ID.
+A proxy failure before reaching the application may have no application entry.
+
+See the [logging guide](docs/logging.md) for field definitions,
+HTTP failure investigation and observed log-retrieval limitations.
+
 ## Automated tests
 
 With the environment running:
 
 ```bash
 python3 tests/http_smoke.py
+python3 tests/test_access_logs.py
 bash tests/test_shutdown.sh
 bash tests/test_recovery.sh
 ```
 
 The HTTP suite checks application identity, health responses, query strings
 and unknown routes through Nginx.
+
+The log suite checks correlation between response headers, proxy logs and
+application logs, including HTTP 404 responses. It also checks JSON escaping,
+distinct request IDs, timestamps and upstream timing fields.
 
 The shutdown suite creates isolated temporary containers and verifies
 SIGTERM and SIGINT handling, exit code 0, the OOM indicator and shutdown logs.
@@ -84,8 +109,15 @@ for cleanup limitations and manual recovery.
 runs on pushes, pull requests and manual execution.
 
 The workflow validates shell syntax and Compose configuration, builds the
-environment, runs HTTP, recovery and shutdown tests, executes diagnostics
-and collects logs before cleanup.
+environment, runs HTTP, log-correlation, recovery and shutdown tests,
+and executes environment diagnostics.
+
+Before cleanup, it collects container status and service logs and uploads
+them as a `lab-diagnostics-<run-id>-<attempt>` artifact with seven-day retention.
+Collection, upload and cleanup are attempted even after test failures.
+
+Download the artifact from the workflow run's Summary page to inspect
+`container-status.txt` and `compose.log` after the containers are removed.
 
 ![GitHub Actions recovery validation](screenshots/verifylab.png)
 
@@ -103,6 +135,9 @@ tested locally and in CI.
 
 ## Evidence
 
+- [Structured Nginx access logs](screenshots/NginxAccessLogs.png)
+- [Application 404 log](screenshots/404log.png)
+- [Backend outage log](screenshots/BEOutage.png)
 - [Backend outage and recovery](screenshots/testrecovery.png)
 - [Environment diagnostics in CI](screenshots/Environment_Diagnostics_CI.png)
 - [Application restrictions](screenshots/AppRestrictions.png)
