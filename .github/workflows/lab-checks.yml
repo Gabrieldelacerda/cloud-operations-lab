@@ -27,6 +27,7 @@ jobs:
           bash -n scripts/diagnose.sh
           bash -n tests/test_shutdown.sh
           bash -n tests/test_recovery.sh
+          bash -n tests/test_diagnostics.sh
 
       - name: Validate Compose configuration
         run: docker compose config --quiet
@@ -42,6 +43,9 @@ jobs:
 
       - name: Test backend outage and recovery
         run: bash tests/test_recovery.sh
+
+      - name: Test diagnostic failure detection
+        run: bash tests/test_diagnostics.sh
 
       - name: Run environment diagnostics
         run: bash scripts/diagnose.sh
