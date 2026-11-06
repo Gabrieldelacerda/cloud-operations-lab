@@ -68,6 +68,23 @@ done
 [[ "$READY" == 1 ]] || fail "HTTP 200 did not return after restoring the backend"
 
 python3 tests/http_smoke.py
+
+echo "Waiting for application and proxy healthchecks..."
+HEALTHY=0
+DEADLINE=$((SECONDS + 45))
+while (( SECONDS < DEADLINE )); do
+  APP_HEALTH=$(docker inspect --format '{{.State.Health.Status}}' "$APP_ID")
+  NGINX_HEALTH=$(docker inspect --format '{{.State.Health.Status}}' "$NGINX_ID")
+
+  if [[ "$APP_HEALTH" == healthy && "$NGINX_HEALTH" == healthy ]]; then
+    HEALTHY=1
+    break
+  fi
+  sleep 1
+done
+[[ "$HEALTHY" == 1 ]] ||
+  fail "Healthchecks did not recover: app=$APP_HEALTH nginx=$NGINX_HEALTH"
+
 [[ "$(docker compose ps -q nginx)" == "$NGINX_ID" ]] ||
   fail "The Nginx container was replaced during recovery"
 [[ "$(docker inspect --format '{{.State.Running}}' "$NGINX_ID")" == true ]] ||
@@ -76,4 +93,5 @@ python3 tests/http_smoke.py
   fail "Nginx restarted during recovery"
 
 RESTORE_NEEDED=0
+echo "[ OK ] Both container healthchecks recovered"
 echo "[ OK ] HTTP 200 restored without restarting Nginx"
