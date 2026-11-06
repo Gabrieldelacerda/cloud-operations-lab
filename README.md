@@ -12,13 +12,14 @@ recovery and testing operational improvements with Python, Nginx and Docker Comp
 - Read-only application filesystem, dropped capabilities and no-new-privileges.
 - Container log rotation.
 - JSON request logs correlated across Nginx and the application using request IDs.
+- Automated outage, recovery and diagnostic failure checks.
 
 The Python application listens on port 8000 inside the Compose network.
 
 ## Run locally
 
 Requirements: Git, Docker Engine, Docker Compose, Bash and curl.
-Python 3 is also required for the HTTP, log-correlation and recovery tests.
+Python 3 is also required for Python tests and health snapshots.
 
 ```bash
 git clone https://github.com/Gabrieldelacerda/cloud-operations-lab.git
@@ -33,11 +34,24 @@ When using a VM, execute these commands inside that VM.
 
 ## Troubleshooting
 
-Collect container status, recent logs and the HTTP health response:
+Check service state, health, recent logs and the HTTP health response:
 
 ```bash
 bash scripts/diagnose.sh
 ```
+
+Diagnostics return a nonzero exit code for missing, stopped or unhealthy
+services, failed commands or an unsuccessful HTTP health request.
+The script collects evidence without modifying the environment.
+
+Inspect recent Docker healthcheck results:
+
+```bash
+python3 scripts/health_snapshot.py
+```
+
+The snapshot includes probe history, process status, exit codes and the
+OOM indicator. Successful collection does not imply healthy services.
 
 For individual checks:
 
@@ -47,11 +61,8 @@ docker compose logs --tail=100
 curl -i --max-time 5 http://127.0.0.1:8088/health
 ```
 
-Use container status, logs and HTTP responses together to investigate a
-failure before making changes.
-
 See the [operations guide](docs/operations.md) for healthchecks, container
-restrictions, log rotation and recovery procedures.
+restrictions, log rotation, recovery and diagnostic exit behavior.
 
 ## Request correlation
 
@@ -81,27 +92,25 @@ python3 tests/http_smoke.py
 python3 tests/test_access_logs.py
 bash tests/test_shutdown.sh
 bash tests/test_recovery.sh
+bash tests/test_diagnostics.sh
 ```
 
-The HTTP suite checks application identity, health responses, query strings
-and unknown routes through Nginx.
+| Suite | Verifies |
+| --- | --- |
+| HTTP smoke | Application identity, health, query strings and unknown routes |
+| Access logs | Correlated IDs, JSON escaping, statuses, timestamps and upstream timings |
+| Shutdown | SIGTERM/SIGINT handling, exit code 0, OOM indicator and shutdown logs |
+| Recovery | HTTP failure and recovery, healthy containers and no Nginx restart |
+| Diagnostics | Success when healthy, failure with a stopped backend and success after restoration |
 
-The log suite checks correlation between response headers, proxy logs and
-application logs, including HTTP 404 responses. It also checks JSON escaping,
-distinct request IDs, timestamps and upstream timing fields.
+Shutdown tests use isolated temporary containers that are removed afterward.
 
-The shutdown suite creates isolated temporary containers and verifies
-SIGTERM and SIGINT handling, exit code 0, the OOM indicator and shutdown logs.
-Temporary containers are removed after testing.
+Recovery and diagnostic tests temporarily interrupt the current lab
+application. Their exit handlers attempt restoration after failures or
+interruptions. They cannot recover from every failure condition.
 
-The recovery suite temporarily stops the lab application, expects HTTP
-502 or 504, restores the backend and reruns the HTTP checks. It also verifies
-that Nginx was neither restarted nor replaced.
-
-The recovery test interrupts the current lab. Its exit handler attempts
-to start the application again if the test fails or is interrupted.
-See the [operations guide](docs/operations.md#test-backend-outage-and-recovery)
-for cleanup limitations and manual recovery.
+See the [operations guide](docs/operations.md) for cleanup limitations
+and manual recovery.
 
 ## Continuous integration
 
@@ -109,15 +118,20 @@ for cleanup limitations and manual recovery.
 runs on pushes, pull requests and manual execution.
 
 The workflow validates shell syntax and Compose configuration, builds the
-environment, runs HTTP, log-correlation, recovery and shutdown tests,
-and executes environment diagnostics.
+environment, runs all five test suites and executes environment diagnostics.
 
-Before cleanup, it collects container status and service logs and uploads
-them as a `lab-diagnostics-<run-id>-<attempt>` artifact with seven-day retention.
+Before cleanup, it attempts to upload a
+`lab-diagnostics-<run-id>-<attempt>` artifact with seven-day retention:
+
+- `container-status.txt`: container states.
+- `compose.log`: latest 100 log lines per service.
+- `health-status.json`: service state and recent healthcheck history.
+
+Download the artifact from the workflow run's Summary page to investigate
+the environment after its containers are removed.
+
 Collection, upload and cleanup are attempted even after test failures.
-
-Download the artifact from the workflow run's Summary page to inspect
-`container-status.txt` and `compose.log` after the containers are removed.
+Runner loss or collection errors can prevent complete evidence from being saved.
 
 ![GitHub Actions recovery validation](screenshots/verifylab.png)
 
@@ -130,8 +144,8 @@ Logs identified a connection timeout to the stopped backend. Starting the
 application restored HTTP 200 without restarting Nginx.
 
 The investigation also exposed slow shutdown, which led to explicit signal
-handling and automated shutdown tests. Backend outage and recovery are now
-tested locally and in CI.
+handling and automated shutdown tests. Backend outage, recovery and diagnostic
+failure detection are now tested locally and in CI.
 
 ## Evidence
 
@@ -157,6 +171,6 @@ docker compose down
 ## Scope
 
 This is a local learning environment using Python's standard-library HTTP
-server. Recovery is explicitly performed by the test script; the lab does
+server. Recovery is explicitly performed by the test scripts; the lab does
 not implement automatic failover. Cloud infrastructure and additional
 incident scenarios are planned extensions.
