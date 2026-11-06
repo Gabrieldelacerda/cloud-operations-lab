@@ -1,10 +1,21 @@
 import json
 import signal
+from datetime import datetime, timezone
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import urlsplit
 
 
 class RequestHandler(BaseHTTPRequestHandler):
+    def log_request(self, code="-", size="-"):
+        print(json.dumps({
+            "time": datetime.now(timezone.utc).isoformat(),
+            "event": "http_request",
+            "request_id": self.headers.get("X-Request-ID"),
+            "method": self.command,
+            "uri": self.path,
+            "status": code,
+        }), flush=True)
+
     def do_GET(self):
         path = urlsplit(self.path).path
 
@@ -19,7 +30,6 @@ class RequestHandler(BaseHTTPRequestHandler):
             payload = {"error": "Not found"}
 
         body = json.dumps(payload).encode("utf-8")
-
         self.send_response(status)
         self.send_header("Content-Type", "application/json")
         self.send_header("Content-Length", str(len(body)))
@@ -40,7 +50,6 @@ def main():
     with ThreadingHTTPServer(("0.0.0.0", 8000), RequestHandler) as server:
         server.timeout = 0.5
         print("Application listening on port 8000", flush=True)
-
         while not stopping:
             server.handle_request()
 

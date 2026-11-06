@@ -30,16 +30,24 @@ class AccessLogTests(unittest.TestCase):
             self.assertRegex(request_id, r"^[0-9a-f]{32}$")
             response.read()
 
-        entry = self.wait_for_entry(marker, path)
-        self.assertEqual(entry["request_id"], request_id)
-        self.assertEqual(entry["method"], "GET")
-        self.assertEqual(entry["uri"], path)
-        self.assertIs(type(entry["status"]), int)
-        self.assertEqual(entry["status"], expected_status)
-        self.assertEqual(entry["upstream_status"], str(expected_status))
-        self.assertTrue(entry["upstream_addr"])
-        self.assertNotEqual(entry["upstream_addr"], "-")
-        self.assertIsNotNone(datetime.fromisoformat(entry["time"]).tzinfo)
+        proxy_entry = self.wait_for_entry("nginx", marker, path)
+        app_entry = self.wait_for_entry("app", marker, path)
+
+        for service, entry in (("nginx", proxy_entry), ("app", app_entry)):
+            with self.subTest(service=service):
+                self.assertEqual(entry["request_id"], request_id)
+                self.assertEqual(entry["method"], "GET")
+                self.assertEqual(entry["uri"], path)
+                self.assertIs(type(entry["status"]), int)
+                self.assertEqual(entry["status"], expected_status)
+                self.assertIsNotNone(
+                    datetime.fromisoformat(entry["time"]).tzinfo
+                )
+
+        self.assertEqual(app_entry["event"], "http_request")
+        self.assertEqual(proxy_entry["upstream_status"], str(expected_status))
+        self.assertTrue(proxy_entry["upstream_addr"])
+        self.assertNotEqual(proxy_entry["upstream_addr"], "-")
 
         for field in (
             "request_time",
@@ -48,13 +56,13 @@ class AccessLogTests(unittest.TestCase):
             "upstream_response_time",
         ):
             with self.subTest(field=field):
-                value = float(entry[field])
+                value = float(proxy_entry[field])
                 self.assertTrue(math.isfinite(value))
                 self.assertGreaterEqual(value, 0)
 
         return request_id
 
-    def wait_for_entry(self, marker, path):
+    def wait_for_entry(self, service, marker, path):
         deadline = time.monotonic() + 10
 
         while time.monotonic() < deadline:
@@ -63,7 +71,7 @@ class AccessLogTests(unittest.TestCase):
                 [
                     "docker", "compose", "logs",
                     "--no-color", "--no-log-prefix",
-                    "--tail", "100", "nginx",
+                    "--tail", "100", service,
                 ],
                 check=True,
                 capture_output=True,
@@ -80,7 +88,7 @@ class AccessLogTests(unittest.TestCase):
 
             time.sleep(0.2)
 
-        self.fail(f"No matching JSON access log found for {path}")
+        self.fail(f"No matching JSON log found in {service} for {path}")
 
     def test_successful_request(self):
         self.check_request("/health", 200)
@@ -98,5 +106,5 @@ class AccessLogTests(unittest.TestCase):
 
 
 if __name__ == "__main__":
-    print(f"Checking Nginx access logs for {BASE_URL}", flush=True)
+    print(f"Checking correlated request logs for {BASE_URL}", flush=True)
     unittest.main(verbosity=2)
