@@ -147,6 +147,24 @@ The investigation also exposed slow shutdown, which led to explicit signal
 handling and automated shutdown tests. Backend outage, recovery and diagnostic
 failure detection are now tested locally and in CI.
 
+## Reproduce a slow-backend timeout
+
+In [Incident 001](docs/incidents/001-backend-unavailable.md), Nginx timed out
+while connecting to the stopped backend. In
+[Incident 002](docs/incidents/002-slow-backend.md), Nginx connected but timed
+out waiting for response headers. Both incidents produced HTTP 504. The
+Nginx error log identifies which phase timed out.
+
+Run the slow-backend scenario in the local lab:
+
+```bash
+bash tests/test_slow_backend.sh
+```
+
+The test enables the slow route, matches the 504 response to the Nginx logs
+and restores the default Compose configuration. In GitHub Actions, the
+diagnostics artifact includes the test output in `slow-backend.log`.
+
 ## Evidence
 
 - [Structured Nginx access logs](screenshots/NginxAccessLogs.png)
