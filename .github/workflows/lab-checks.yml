@@ -28,6 +28,7 @@ jobs:
           bash -n tests/test_shutdown.sh
           bash -n tests/test_recovery.sh
           bash -n tests/test_diagnostics.sh
+          bash -n tests/test_slow_backend.sh
 
       - name: Validate Compose configuration
         run: docker compose config --quiet
@@ -52,6 +53,9 @@ jobs:
 
       - name: Test container shutdown
         run: bash tests/test_shutdown.sh
+
+      - name: Test slow backend read timeout
+        run: bash tests/test_slow_backend.sh
 
       - name: Capture healthcheck history
         if: always()
