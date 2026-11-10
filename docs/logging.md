@@ -146,3 +146,19 @@ older entries rotate out.
 
 The `uri` field includes query parameters. Use synthetic request data and
 avoid placing credentials or tokens in URLs.
+
+## Find entries by request ID
+
+Copy the 32-character `X-Request-ID` response header into `REQUEST_ID`.
+From the repository root, search the latest 100 log lines per service:
+
+    python3 scripts/find_request.py "$REQUEST_ID"
+
+To search a saved CI `compose.log` after the containers have been removed:
+
+    python3 scripts/find_request.py --stdin "$REQUEST_ID" < compose.log
+
+The command prints JSON log lines with an exact `request_id` match. A proxy
+failure before the request reaches the app can produce only an Nginx entry.
+Exit code `1` means the supplied logs contained no match. Exit code `2` means
+the ID was invalid or the live logs could not be read.
