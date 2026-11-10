@@ -177,3 +177,18 @@ When CI captures `compose.log`, the diagnostics artifact also includes
 `proxy-summary.json`. The counts cover only the collected log window and can
 include health checks and deliberately failing test requests. Use
 `slow-backend.log` for timeout evidence captured before Compose restoration.
+
+## Verify request correlation in the running lab
+
+Start the default stack and run the live lookup test:
+
+    docker compose up -d --build --wait --wait-timeout 60
+    python3 tests/test_live_request_lookup.py
+
+The test sends one request to `/health`, reads its `X-Request-ID` response
+header, and checks that the lookup finds entries from both services. The
+same check runs after the stack starts in GitHub Actions.
+
+When investigating a missing match, start with a fresh request. The live
+lookup reads only the latest 100 lines per service, and older records can
+fall outside that window.
