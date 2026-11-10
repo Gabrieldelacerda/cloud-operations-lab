@@ -37,7 +37,30 @@ class ProxyLogSummaryTests(unittest.TestCase):
     def test_empty_summary_when_no_proxy_access_logs_are_present(self):
         self.assertEqual(
             self.summarize(["", "app-1  | Application started"]),
-            {"requests": 0, "statuses": {}, "server_errors_by_path": {}},
+            {
+                "requests": 0,
+                "statuses": {},
+                "server_errors_by_path": {},
+                "request_time_seconds": {"samples": 0, "p95": None, "max": None},
+            },
+        )
+
+
+    def test_latency_uses_nearest_rank_and_skips_invalid_values(self):
+        values = [str(value) for value in range(1, 21)] + ["-", "NaN", "-1"]
+        summary = self.summarize([
+            json.dumps({
+                "status": 200,
+                "uri": "/health",
+                "upstream_status": "200",
+                "request_time": value,
+            })
+            for value in values
+        ])
+        self.assertEqual(summary["requests"], 23)
+        self.assertEqual(
+            summary["request_time_seconds"],
+            {"samples": 20, "p95": 19.0, "max": 20.0},
         )
 
 

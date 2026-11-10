@@ -1,4 +1,5 @@
 import json
+import math
 import sys
 from collections import Counter
 
@@ -6,6 +7,7 @@ from collections import Counter
 def summarize(lines):
     statuses = Counter()
     server_errors = Counter()
+    durations = []
 
     for line in lines:
         if not line.lstrip().startswith("{"):
@@ -25,10 +27,26 @@ def summarize(lines):
             continue
 
         statuses[status] += 1
+        try:
+            duration = float(entry.get("request_time"))
+        except (TypeError, ValueError, OverflowError):
+            pass
+        else:
+            if math.isfinite(duration) and duration >= 0:
+                durations.append(duration)
         if status >= 500:
             server_errors[uri.split("?", 1)[0]] += 1
 
+    durations.sort()
+    samples = len(durations)
+    p95_index = (95 * samples + 99) // 100 - 1
+
     return {
+        "request_time_seconds": {
+            "samples": samples,
+            "p95": durations[p95_index] if samples else None,
+            "max": durations[-1] if samples else None,
+        },
         "requests": sum(statuses.values()),
         "statuses": dict(sorted(statuses.items())),
         "server_errors_by_path": dict(sorted(server_errors.items())),
