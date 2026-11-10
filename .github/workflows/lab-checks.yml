@@ -30,6 +30,9 @@ jobs:
           bash -n tests/test_diagnostics.sh
           bash -n tests/test_slow_backend.sh
 
+      - name: Test request ID lookup
+        run: python3 tests/test_find_request.py
+
       - name: Validate Compose configuration
         run: docker compose config --quiet
 
