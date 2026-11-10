@@ -165,6 +165,17 @@ The test enables the slow route, matches the 504 response to the Nginx logs
 and restores the default Compose configuration. In GitHub Actions, the
 diagnostics artifact includes the test output in `slow-backend.log`.
 
+## Inspect proxy diagnostics
+
+Open the GitHub Actions run summary for Nginx response counts and request
+timing. The diagnostics artifact includes `proxy-summary.json`, which also
+groups HTTP 5xx responses by route.
+
+The latency figures use Nginx's total request time and cover only the
+collected log window. Health checks and deliberate failures can appear in
+that sample. See the [logging guide](docs/logging.md#summarize-proxy-responses)
+to recreate the report locally or trace a single request by ID.
+
 ## Evidence
 
 - [Structured Nginx access logs](screenshots/NginxAccessLogs.png)
