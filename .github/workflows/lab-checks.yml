@@ -85,6 +85,26 @@ jobs:
         run: |
           python3 scripts/summarize_proxy_logs.py < artifacts/compose.log > artifacts/proxy-summary.json
 
+      - name: Show proxy diagnostics in the run summary
+        if: ${{ always() && hashFiles('artifacts/proxy-summary.json') != '' }}
+        run: |
+          python3 - <<'SUMMARY' >> "$GITHUB_STEP_SUMMARY"
+          import json
+          from pathlib import Path
+
+          report = json.loads(Path("artifacts/proxy-summary.json").read_text())
+          timing = report["request_time_seconds"]
+          print("## Nginx responses in collected logs")
+          print()
+          print(f"- Requests captured: {report['requests']}")
+          for status, count in report["statuses"].items():
+              print(f"- HTTP {status}: {count}")
+          if timing["samples"]:
+              print(f"- p95 request time: {timing['p95']:.3f} s")
+              print(f"- Maximum request time: {timing['max']:.3f} s")
+              print(f"- Requests with timing data: {timing['samples']}")
+          SUMMARY
+
       - name: Upload container diagnostics
         if: always()
         uses: actions/upload-artifact@v7
