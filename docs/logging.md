@@ -162,3 +162,18 @@ The command prints JSON log lines with an exact `request_id` match. A proxy
 failure before the request reaches the app can produce only an Nginx entry.
 Exit code `1` means the supplied logs contained no match. Exit code `2` means
 the ID was invalid or the live logs could not be read.
+
+## Summarize proxy responses
+
+From the repository root, summarize a saved Compose log:
+
+    python3 scripts/summarize_proxy_logs.py < compose.log
+
+The JSON result counts Nginx responses by HTTP status and groups 5xx
+responses by path with query strings removed. Application records and
+plain-text Nginx error messages are skipped.
+
+When CI captures `compose.log`, the diagnostics artifact also includes
+`proxy-summary.json`. The counts cover only the collected log window and can
+include health checks and deliberately failing test requests. Use
+`slow-backend.log` for timeout evidence captured before Compose restoration.
