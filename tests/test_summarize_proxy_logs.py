@@ -98,28 +98,30 @@ class ProxyLogSummaryTests(unittest.TestCase):
 
     def test_groups_route_timings_without_query_strings(self):
         records = [
-            ("/health?source=smoke", "0.010"),
-            ("/lab/slow?probe=1", "4.000"),
-            ("/lab/slow?probe=2", "5.000"),
-            ("/", "-"),
+            ("/health?source=smoke", 200, "0.010"),
+            ("/lab/slow?probe=1", 200, "4.000"),
+            ("/lab/slow?probe=2", 504, "5.000"),
+            ("/", 404, "-"),
         ]
         summary = self.summarize([
             json.dumps({
-                "status": 200,
+                "status": status,
                 "uri": uri,
-                "upstream_status": "200",
+                "upstream_status": str(status),
                 "request_time": duration,
             })
-            for uri, duration in records
+            for uri, status, duration in records
         ])
 
         self.assertEqual(summary["routes"], {
             "/": {
                 "requests": 1,
+                "statuses": {"404": 1},
                 "request_time_seconds": {"samples": 0, "p95": None, "max": None},
             },
             "/lab/slow": {
                 "requests": 2,
+                "statuses": {"200": 1, "504": 1},
                 "request_time_seconds": {"samples": 2, "p95": 5.0, "max": 5.0},
             },
         })

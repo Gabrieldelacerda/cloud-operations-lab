@@ -22,7 +22,7 @@ def summarize(lines):
     durations = []
     non_health_durations = []
     non_health_requests = 0
-    route_requests = Counter()
+    route_statuses = defaultdict(Counter)
     route_durations = defaultdict(list)
 
     for line in lines:
@@ -43,7 +43,7 @@ def summarize(lines):
         statuses[status] += 1
         if not is_health:
             non_health_requests += 1
-            route_requests[path] += 1
+            route_statuses[path][status] += 1
         try:
             duration = float(entry.get("request_time"))
         except (TypeError, ValueError, OverflowError):
@@ -68,10 +68,11 @@ def summarize(lines):
         "server_errors_by_path": dict(sorted(server_errors.items())),
         "routes": {
             path: {
-                "requests": route_requests[path],
+                "requests": sum(route_statuses[path].values()),
+                "statuses": dict(sorted(route_statuses[path].items())),
                 "request_time_seconds": summarize_durations(route_durations[path]),
             }
-            for path in sorted(route_requests)
+            for path in sorted(route_statuses)
         },
     }
 
