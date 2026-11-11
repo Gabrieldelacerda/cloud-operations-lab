@@ -178,6 +178,29 @@ When CI captures `compose.log`, the diagnostics artifact also includes
 include health checks and deliberately failing test requests. Use
 `slow-backend.log` for timeout evidence captured before Compose restoration.
 
+### Interpret the latency figures
+
+The GitHub Actions run summary shows timings for all captured proxy requests
+and for requests excluding `/health`. The same figures are available in
+`proxy-summary.json`. To rebuild the report from a saved `compose.log`, run
+this command from the repository root:
+
+    python3 scripts/summarize_proxy_logs.py < compose.log
+
+The `requests` count includes valid access records even when `request_time`
+is missing. The `samples` count includes only records with a valid duration.
+Both p95 and maximum are reported in seconds.
+
+The p95 is the duration at position `ceil(0.95 × samples)` after sorting the
+durations from shortest to longest. With 19 health requests at 10 ms and one
+slow request at 5 s, the overall p95 is 10 ms and the maximum is 5 s.
+The `excluding_health` group has one timing sample, so its p95 and maximum
+are both 5 s. The filter uses the URI path, so `/health?source=smoke` is
+also excluded from that group.
+
+Read the sample count alongside the p95. These figures describe the
+collected log window, which can include deliberate failures from lab tests.
+
 ## Verify request correlation in the running lab
 
 Start the default stack and run the live lookup test:
