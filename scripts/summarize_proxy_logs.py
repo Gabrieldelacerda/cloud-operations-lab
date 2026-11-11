@@ -1,7 +1,7 @@
 import json
 import math
 import sys
-from collections import Counter
+from collections import Counter, defaultdict
 
 
 def summarize_durations(durations):
@@ -20,6 +20,8 @@ def summarize(lines):
     durations = []
     non_health_durations = []
     non_health_requests = 0
+    route_requests = Counter()
+    route_durations = defaultdict(list)
 
     for line in lines:
         if not line.lstrip().startswith("{"):
@@ -44,6 +46,7 @@ def summarize(lines):
         statuses[status] += 1
         if not is_health:
             non_health_requests += 1
+            route_requests[path] += 1
         try:
             duration = float(entry.get("request_time"))
         except (TypeError, ValueError, OverflowError):
@@ -53,6 +56,7 @@ def summarize(lines):
                 durations.append(duration)
                 if not is_health:
                     non_health_durations.append(duration)
+                    route_durations[path].append(duration)
         if status >= 500:
             server_errors[path] += 1
 
@@ -65,6 +69,13 @@ def summarize(lines):
         "requests": sum(statuses.values()),
         "statuses": dict(sorted(statuses.items())),
         "server_errors_by_path": dict(sorted(server_errors.items())),
+        "routes": {
+            path: {
+                "requests": route_requests[path],
+                "request_time_seconds": summarize_durations(route_durations[path]),
+            }
+            for path in sorted(route_requests)
+        },
     }
 
 
