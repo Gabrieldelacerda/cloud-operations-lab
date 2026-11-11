@@ -4,10 +4,22 @@ import sys
 from collections import Counter
 
 
+def summarize_durations(durations):
+    ordered = sorted(durations)
+    samples = len(ordered)
+    if not samples:
+        return {"samples": 0, "p95": None, "max": None}
+
+    p95_rank = (95 * samples + 99) // 100
+    return {"samples": samples, "p95": ordered[p95_rank - 1], "max": ordered[-1]}
+
+
 def summarize(lines):
     statuses = Counter()
     server_errors = Counter()
     durations = []
+    non_health_durations = []
+    non_health_requests = 0
 
     for line in lines:
         if not line.lstrip().startswith("{"):
@@ -26,7 +38,12 @@ def summarize(lines):
         if not isinstance(uri, str) or not uri:
             continue
 
+        path = uri.split("?", 1)[0]
+        is_health = path == "/health"
+
         statuses[status] += 1
+        if not is_health:
+            non_health_requests += 1
         try:
             duration = float(entry.get("request_time"))
         except (TypeError, ValueError, OverflowError):
@@ -34,18 +51,16 @@ def summarize(lines):
         else:
             if math.isfinite(duration) and duration >= 0:
                 durations.append(duration)
+                if not is_health:
+                    non_health_durations.append(duration)
         if status >= 500:
-            server_errors[uri.split("?", 1)[0]] += 1
-
-    durations.sort()
-    samples = len(durations)
-    p95_index = (95 * samples + 99) // 100 - 1
+            server_errors[path] += 1
 
     return {
-        "request_time_seconds": {
-            "samples": samples,
-            "p95": durations[p95_index] if samples else None,
-            "max": durations[-1] if samples else None,
+        "request_time_seconds": summarize_durations(durations),
+        "excluding_health": {
+            "requests": non_health_requests,
+            "request_time_seconds": summarize_durations(non_health_durations),
         },
         "requests": sum(statuses.values()),
         "statuses": dict(sorted(statuses.items())),
