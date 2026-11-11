@@ -137,6 +137,24 @@ jobs:
                   f"- `{safe_route}` | max {timing['max']:.3f} s | "
                   f"p95 {timing['p95']:.3f} s | samples {timing['samples']}"
               )
+
+          failures = [
+              (route, stats)
+              for route, stats in report["routes"].items()
+              if route in report["server_errors_by_path"]
+          ]
+          failures.sort(key=lambda item: (
+              -report["server_errors_by_path"][item[0]], item[0]
+          ))
+          print()
+          print("### Routes with HTTP 5xx responses")
+          print()
+          if not failures:
+              print("No HTTP 5xx responses outside /health in this sample.")
+          for route, stats in failures[:5]:
+              count = report["server_errors_by_path"][route]
+              safe_route = quote(route, safe="/%")
+              print(f"- `{safe_route}` | {count} of {stats['requests']} requests returned 5xx")
           SUMMARY
 
       - name: Summarize the slow backend probe
