@@ -142,9 +142,7 @@ jobs:
       - name: Summarize the slow backend probe
         if: ${{ always() && hashFiles('artifacts/slow-backend.log') != '' }}
         run: |
-          set -o pipefail
-          sed -n 's/^Access log: //p' artifacts/slow-backend.log |
-            python3 scripts/summarize_proxy_logs.py > artifacts/slow-backend-summary.json
+          python3 scripts/summarize_proxy_logs.py             < artifacts/slow-backend.log > artifacts/slow-backend-summary.json
 
       - name: Upload container diagnostics
         if: always()

@@ -24,6 +24,7 @@ def summarize(lines):
     route_durations = defaultdict(list)
 
     for line in lines:
+        line = line.removeprefix("Access log: ")
         if not line.lstrip().startswith("{"):
             _, _, line = line.partition(" | ")
         try:

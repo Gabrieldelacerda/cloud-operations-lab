@@ -125,5 +125,26 @@ class ProxyLogSummaryTests(unittest.TestCase):
         })
 
 
+    def test_reads_saved_probe_output_directly(self):
+        record = json.dumps({
+            "uri": "/lab/slow?probe=example",
+            "status": 504,
+            "upstream_status": "504",
+            "request_time": "5.005",
+        })
+        summary = self.summarize([
+            "Response: HTTP 504",
+            f"Access log: {record}",
+            "Error log: upstream timed out while reading response header",
+        ])
+
+        self.assertEqual(summary["requests"], 1)
+        self.assertEqual(summary["statuses"], {"504": 1})
+        self.assertEqual(
+            summary["routes"]["/lab/slow"]["request_time_seconds"]["max"],
+            5.005,
+        )
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)
