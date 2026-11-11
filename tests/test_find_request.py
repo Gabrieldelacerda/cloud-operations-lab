@@ -32,6 +32,24 @@ class FindRequestTests(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertEqual(result.stdout.splitlines(), [proxy, app])
 
+    def test_finds_access_record_in_slow_backend_probe_output(self):
+        record = "Access log: " + json.dumps({
+            "request_id": REQUEST_ID,
+            "uri": "/lab/slow?probe=example",
+            "status": 504,
+            "request_time": "5.005",
+        })
+        log = "\n".join([
+            f"Response: HTTP 504, X-Request-ID: {REQUEST_ID}",
+            record,
+            "Error log: upstream timed out while reading response header",
+        ])
+
+        result = self.lookup(REQUEST_ID, log)
+
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(result.stdout.splitlines(), [record])
+
     def test_reports_no_matches(self):
         result = self.lookup(REQUEST_ID, "app-1  | Application started\n")
         self.assertEqual(result.returncode, 1)

@@ -7,9 +7,11 @@ import sys
 
 def matching_lines(lines, request_id):
     for line in lines:
-        _, separator, message = line.partition(" | ")
-        if line.lstrip().startswith("{") or not separator:
-            message = line
+        message = line.removeprefix("Access log: ")
+        if message == line and not line.lstrip().startswith("{"):
+            _, separator, payload = line.partition(" | ")
+            if separator:
+                message = payload
         try:
             record = json.loads(message)
         except ValueError:
