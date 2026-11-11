@@ -3,6 +3,8 @@ import math
 import sys
 from collections import Counter, defaultdict
 
+from log_records import parse_log_record
+
 
 def summarize_durations(durations):
     ordered = sorted(durations)
@@ -24,14 +26,8 @@ def summarize(lines):
     route_durations = defaultdict(list)
 
     for line in lines:
-        line = line.removeprefix("Access log: ")
-        if not line.lstrip().startswith("{"):
-            _, _, line = line.partition(" | ")
-        try:
-            entry = json.loads(line)
-        except ValueError:
-            continue
-        if not isinstance(entry, dict) or "upstream_status" not in entry:
+        entry = parse_log_record(line)
+        if entry is None or "upstream_status" not in entry:
             continue
 
         status = entry.get("status")

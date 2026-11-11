@@ -1,22 +1,15 @@
 import argparse
-import json
 import re
 import subprocess
 import sys
 
+from log_records import parse_log_record
+
 
 def matching_lines(lines, request_id):
     for line in lines:
-        message = line.removeprefix("Access log: ")
-        if message == line and not line.lstrip().startswith("{"):
-            _, separator, payload = line.partition(" | ")
-            if separator:
-                message = payload
-        try:
-            record = json.loads(message)
-        except ValueError:
-            continue
-        if isinstance(record, dict) and record.get("request_id") == request_id:
+        record = parse_log_record(line)
+        if record is not None and record.get("request_id") == request_id:
             yield line.rstrip("\r\n")
 
 
