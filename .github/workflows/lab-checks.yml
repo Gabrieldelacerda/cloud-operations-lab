@@ -106,6 +106,18 @@ jobs:
               print(f"- p95 request time: {timing['p95']:.3f} s")
               print(f"- Maximum request time: {timing['max']:.3f} s")
               print(f"- Requests with timing data: {timing['samples']}")
+          filtered = report["excluding_health"]
+          filtered_timing = filtered["request_time_seconds"]
+          print()
+          print("### Requests excluding /health")
+          print()
+          print(f"- Requests captured: {filtered['requests']}")
+          print(f"- Requests with timing data: {filtered_timing['samples']}")
+          if filtered_timing["samples"]:
+              print(f"- p95 request time: {filtered_timing['p95']:.3f} s")
+              print(f"- Maximum request time: {filtered_timing['max']:.3f} s")
+          else:
+              print("- No request timing data in this sample.")
           SUMMARY
 
       - name: Upload container diagnostics
