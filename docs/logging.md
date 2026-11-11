@@ -201,6 +201,29 @@ also excluded from that group.
 Read the sample count alongside the p95. These figures describe the
 collected log window, which can include deliberate failures from lab tests.
 
+### Triage proxy latency and errors
+
+From the repository root, render the Markdown shown in GitHub Actions using
+an extracted `proxy-summary.json`:
+
+    python3 scripts/render_proxy_summary.py < proxy-summary.json
+
+If you have the raw Compose log, generate the report and render it in one
+pipeline:
+
+    python3 scripts/summarize_proxy_logs.py < compose.log |
+      python3 scripts/render_proxy_summary.py
+
+Start with the latency section when the symptom is a slow response. Compare
+the maximum and p95, then check the timing sample count for the route.
+Start with the 5xx section when the symptom is an error. A quick `502` can
+rank high by error count while having a low response time. Use the 5xx count
+and the total requests for that route to assess how often it failed in the
+captured window.
+
+For a specific `504`, follow the request ID into the access log and read
+the matching Nginx error record to identify the timeout phase.
+
 ## Investigate a slow-backend timeout from CI
 
 Open the relevant GitHub Actions run and download its diagnostics artifact.
