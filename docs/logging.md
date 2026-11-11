@@ -201,6 +201,38 @@ also excluded from that group.
 Read the sample count alongside the p95. These figures describe the
 collected log window, which can include deliberate failures from lab tests.
 
+## Investigate a slow-backend timeout from CI
+
+Open the relevant GitHub Actions run and download its diagnostics artifact.
+Extract it to a directory accessible from the machine where you run the
+commands below.
+
+- `slow-backend-summary.json` shows the response status, route, and duration
+  recorded by the probe.
+- `slow-backend.log` contains the probe output, including the response
+  request ID and the Nginx access and error records when captured.
+
+From the repository root, set `log` to the full path of the extracted
+`slow-backend.log`. The example assumes you extracted it to
+`~/Downloads/lab-diagnostics/`:
+
+    log="$HOME/Downloads/lab-diagnostics/slow-backend.log"
+    if [ -r "$log" ]; then
+        request_id=$(awk '/^Response:.*X-Request-ID:/ {print $NF; exit}' "$log")
+        if [ -n "$request_id" ]; then
+            python3 scripts/find_request.py --stdin "$request_id" < "$log"
+        else
+            printf 'No response request ID found in %s\n' "$log" >&2
+        fi
+        grep '^Error log:' "$log"
+    else
+        printf 'Cannot read %s\n' "$log" >&2
+    fi
+
+The lookup returns the access record for that exact request ID. Read the
+`Error log:` line to identify the phase that timed out. In the slow-backend
+scenario, Nginx reports `while reading response header from upstream`.
+
 ## Verify request correlation in the running lab
 
 Start the default stack and run the live lookup test:
