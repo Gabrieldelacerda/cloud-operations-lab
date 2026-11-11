@@ -92,6 +92,7 @@ jobs:
         if: ${{ always() && hashFiles('artifacts/proxy-summary.json') != '' }}
         run: |
           python3 - <<'SUMMARY' >> "$GITHUB_STEP_SUMMARY"
+          from urllib.parse import quote
           import json
           from pathlib import Path
 
@@ -118,6 +119,24 @@ jobs:
               print(f"- Maximum request time: {filtered_timing['max']:.3f} s")
           else:
               print("- No request timing data in this sample.")
+
+          timed_routes = [
+              (route, stats["request_time_seconds"])
+              for route, stats in report["routes"].items()
+              if stats["request_time_seconds"]["samples"]
+          ]
+          timed_routes.sort(key=lambda item: (-item[1]["max"], item[0]))
+          print()
+          print("### Routes with the highest observed request times")
+          print()
+          if not timed_routes:
+              print("No route timing data in this sample.")
+          for route, timing in timed_routes[:5]:
+              safe_route = quote(route, safe="/%")
+              print(
+                  f"- `{safe_route}` | max {timing['max']:.3f} s | "
+                  f"p95 {timing['p95']:.3f} s | samples {timing['samples']}"
+              )
           SUMMARY
 
       - name: Upload container diagnostics
