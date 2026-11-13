@@ -1,11 +1,30 @@
 from urllib.parse import quote
+import argparse
 import json
 import sys
+from pathlib import Path
 
 
 def main():
+    parser = argparse.ArgumentParser(
+        description="Render a proxy summary as Markdown."
+    )
+    parser.add_argument(
+        "report",
+        nargs="?",
+        type=Path,
+        help="Path to the JSON report. Defaults to standard input.",
+    )
+    args = parser.parse_args()
+
     try:
-        report = json.load(sys.stdin)
+        if args.report is None:
+            report = json.load(sys.stdin)
+        else:
+            report = json.loads(args.report.read_text(encoding="utf-8"))
+    except (OSError, UnicodeError) as error:
+        location = args.report if args.report is not None else "standard input"
+        raise SystemExit(f"Could not read proxy summary from {location}: {error}") from None
     except json.JSONDecodeError as error:
         raise SystemExit(
             f"Invalid proxy summary JSON at line {error.lineno}, "

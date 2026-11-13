@@ -3,6 +3,7 @@ import subprocess
 import sys
 import unittest
 from pathlib import Path
+from tempfile import TemporaryDirectory
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -94,6 +95,39 @@ class RenderProxySummaryTests(unittest.TestCase):
                 self.assertEqual(result.stdout, "")
                 self.assertIn(message, result.stderr)
                 self.assertNotIn("Traceback", result.stderr)
+
+    def test_reads_a_saved_report_by_path(self):
+        report = subprocess.check_output(
+            [sys.executable, "-B", "scripts/summarize_proxy_logs.py"],
+            input="",
+            text=True,
+            cwd=ROOT,
+            timeout=5,
+        )
+        with TemporaryDirectory() as directory:
+            path = Path(directory) / "proxy summary.json"
+            path.write_text(report, encoding="utf-8")
+            command = [sys.executable, "-B", "scripts/render_proxy_summary.py"]
+
+            saved = subprocess.check_output(
+                [*command, str(path)], text=True, cwd=ROOT, timeout=5
+            )
+            piped = subprocess.check_output(
+                command, input=report, text=True, cwd=ROOT, timeout=5
+            )
+            self.assertEqual(saved, piped)
+
+            missing = path.with_name("missing.json")
+            result = subprocess.run(
+                [*command, str(missing)],
+                capture_output=True,
+                text=True,
+                cwd=ROOT,
+                timeout=5,
+            )
+            self.assertEqual(result.returncode, 1)
+            self.assertEqual(result.stdout, "")
+            self.assertIn(f"Could not read proxy summary from {missing}", result.stderr)
 
     def test_renders_an_empty_log_window(self):
         lines = self.render([])
