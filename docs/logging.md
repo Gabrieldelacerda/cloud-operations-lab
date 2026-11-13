@@ -224,6 +224,23 @@ captured window.
 For a specific `504`, follow the request ID into the access log and read
 the matching Nginx error record to identify the timeout phase.
 
+### Read the two summaries in GitHub Actions
+
+**Nginx responses in collected logs** uses the Compose logs collected near
+the end of the job. Check this section for response counts and latency by
+route. The overall counts include `/health`. The route rankings exclude it,
+and the summary reports `/health` 5xx responses on a separate line when
+present in the collected logs.
+
+**Slow backend timeout probe** uses the access record captured by the probe
+before the default Compose configuration is restored. A `504` is the
+expected response in this test. The two sections cover different sets of
+records, so their counts can differ.
+
+To confirm which phase timed out, match the response's `X-Request-ID` to its
+access record in `slow-backend.log`, then read the error record for the same
+probe. The HTTP status and duration alone do not identify the timeout phase.
+
 ## Investigate a slow-backend timeout from CI
 
 Open the relevant GitHub Actions run and download its diagnostics artifact.
