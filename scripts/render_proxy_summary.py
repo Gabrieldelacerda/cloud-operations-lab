@@ -11,6 +11,26 @@ def main():
             f"Invalid proxy summary JSON at line {error.lineno}, "
             f"column {error.colno}: {error.msg}"
         ) from None
+
+    if not isinstance(report, dict):
+        raise SystemExit("Invalid proxy summary: expected a JSON object.")
+
+    required_fields = {
+        "requests": int,
+        "statuses": dict,
+        "request_time_seconds": dict,
+        "excluding_health": dict,
+        "routes": dict,
+        "server_errors_by_path": dict,
+    }
+    for field, expected_type in required_fields.items():
+        if field not in report:
+            raise SystemExit(f"Invalid proxy summary: missing field '{field}'.")
+        if type(report[field]) is not expected_type:
+            raise SystemExit(
+                f"Invalid proxy summary: field '{field}' "
+                f"must be of type {expected_type.__name__}."
+            )
     timing = report["request_time_seconds"]
     print("## Nginx responses in collected logs")
     print()

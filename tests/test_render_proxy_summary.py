@@ -73,6 +73,28 @@ class RenderProxySummaryTests(unittest.TestCase):
                 )
                 self.assertNotIn("Traceback", result.stderr)
 
+    def test_rejects_json_with_the_wrong_report_structure(self):
+        cases = [
+            ("[]", "expected a JSON object"),
+            ("{}", "missing field 'requests'"),
+            ('{"requests": 0, "statuses": []}', "field 'statuses' must be of type dict"),
+        ]
+        for report, message in cases:
+            with self.subTest(report=report):
+                result = subprocess.run(
+                    [sys.executable, "-B", "scripts/render_proxy_summary.py"],
+                    input=report,
+                    capture_output=True,
+                    text=True,
+                    cwd=ROOT,
+                    timeout=5,
+                )
+
+                self.assertEqual(result.returncode, 1)
+                self.assertEqual(result.stdout, "")
+                self.assertIn(message, result.stderr)
+                self.assertNotIn("Traceback", result.stderr)
+
     def test_renders_an_empty_log_window(self):
         lines = self.render([])
 
