@@ -106,6 +106,30 @@ jobs:
         run: |
           python3 scripts/summarize_proxy_logs.py             < artifacts/slow-backend.log > artifacts/slow-backend-summary.json
 
+      - name: Show slow backend probe results in the run summary
+        if: ${{ always() && hashFiles('artifacts/slow-backend-summary.json') != '' }}
+        run: |
+          python3 - <<'SLOW_SUMMARY' >> "$GITHUB_STEP_SUMMARY"
+          import json
+          from pathlib import Path
+
+          report = json.loads(
+              Path("artifacts/slow-backend-summary.json").read_text(encoding="utf-8")
+          )
+          timing = report["request_time_seconds"]
+
+          print("## Slow backend timeout probe")
+          print()
+          if report["requests"]:
+              print(f"- Probe requests captured: {report['requests']}")
+              print(f"- HTTP 504 responses: {report['statuses'].get('504', 0)}")
+              if timing["samples"]:
+                  print(f"- Maximum Nginx request time: {timing['max']:.3f} s")
+          else:
+              print("No proxy access records were captured for this probe.")
+          print()
+          SLOW_SUMMARY
+
       - name: Upload container diagnostics
         if: always()
         uses: actions/upload-artifact@v7
