@@ -102,6 +102,9 @@ def main():
     print()
     print("### Routes with HTTP 5xx responses")
     print()
+    health_errors = report["server_errors_by_path"].get("/health", 0)
+    if health_errors:
+        print(f"- HTTP 5xx responses on `/health`: {health_errors}")
     if not failures:
         print("No HTTP 5xx responses outside /health in this sample.")
     for route, stats in failures[:5]:

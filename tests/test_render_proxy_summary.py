@@ -129,6 +129,28 @@ class RenderProxySummaryTests(unittest.TestCase):
             self.assertEqual(result.stdout, "")
             self.assertIn(f"Could not read proxy summary from {missing}", result.stderr)
 
+    def test_shows_health_errors_alongside_other_route_errors(self):
+        lines = self.render([
+            {
+                "uri": "/health?source=smoke",
+                "status": 503,
+                "upstream_status": "503",
+                "request_time": "0.010",
+            },
+            {
+                "uri": "/lab/slow",
+                "status": 504,
+                "upstream_status": "504",
+                "request_time": "5.000",
+            },
+        ])
+
+        errors = lines.index("### Routes with HTTP 5xx responses")
+        self.assertIn("- HTTP 503: 1", lines)
+        self.assertIn("- HTTP 504: 1", lines)
+        self.assertIn("- HTTP 5xx responses on `/health`: 1", lines[errors:])
+        self.assertIn("- `/lab/slow` | 1 of 1 requests returned 5xx", lines[errors:])
+
     def test_renders_an_empty_log_window(self):
         lines = self.render([])
 
