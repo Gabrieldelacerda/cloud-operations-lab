@@ -4,7 +4,13 @@ import sys
 
 
 def main():
-    report = json.load(sys.stdin)
+    try:
+        report = json.load(sys.stdin)
+    except json.JSONDecodeError as error:
+        raise SystemExit(
+            f"Invalid proxy summary JSON at line {error.lineno}, "
+            f"column {error.colno}: {error.msg}"
+        ) from None
     timing = report["request_time_seconds"]
     print("## Nginx responses in collected logs")
     print()

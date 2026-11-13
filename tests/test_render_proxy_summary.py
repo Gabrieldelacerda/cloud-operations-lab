@@ -53,6 +53,26 @@ class RenderProxySummaryTests(unittest.TestCase):
         self.assertIn("- `/lab/slow` | 1 of 1 requests returned 5xx", lines[errors:])
         self.assertFalse(any("`/health`" in line for line in lines[latency:]))
 
+    def test_reports_invalid_json_without_a_traceback(self):
+        for report in ("", '{"requests":'):
+            with self.subTest(report=report):
+                result = subprocess.run(
+                    [sys.executable, "-B", "scripts/render_proxy_summary.py"],
+                    input=report,
+                    capture_output=True,
+                    text=True,
+                    cwd=ROOT,
+                    timeout=5,
+                )
+
+                self.assertEqual(result.returncode, 1)
+                self.assertEqual(result.stdout, "")
+                self.assertTrue(
+                    result.stderr.startswith("Invalid proxy summary JSON at line 1, column "),
+                    result.stderr,
+                )
+                self.assertNotIn("Traceback", result.stderr)
+
     def test_renders_an_empty_log_window(self):
         lines = self.render([])
 
