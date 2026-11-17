@@ -12,14 +12,13 @@ recovery and testing operational improvements with Python, Nginx and Docker Comp
 - Read-only application filesystem, dropped capabilities and no-new-privileges.
 - Container log rotation.
 - JSON request logs correlated across Nginx and the application using request IDs.
-- Automated outage, recovery and diagnostic failure checks.
+- An opt-in slow-backend scenario for investigating proxy read timeouts.
 
 The Python application listens on port 8000 inside the Compose network.
 
 ## Run locally
 
-Requirements: Git, Docker Engine, Docker Compose, Bash and curl.
-Python 3 is also required for Python tests and health snapshots.
+Requirements: Git, Docker Engine, Docker Compose, Bash, curl and Python 3.
 
 ```bash
 git clone https://github.com/Gabrieldelacerda/cloud-operations-lab.git
@@ -34,24 +33,20 @@ When using a VM, execute these commands inside that VM.
 
 ## Troubleshooting
 
-Check service state, health, recent logs and the HTTP health response:
+Collect container status, recent logs and the HTTP health response:
 
 ```bash
 bash scripts/diagnose.sh
 ```
 
-Diagnostics return a nonzero exit code for missing, stopped or unhealthy
-services, failed commands or an unsuccessful HTTP health request.
-The script collects evidence without modifying the environment.
+The diagnostic command exits with a nonzero status when required checks fail,
+including stopped or unhealthy services.
 
-Inspect recent Docker healthcheck results:
+Capture container state and recent healthcheck results as JSON:
 
 ```bash
 python3 scripts/health_snapshot.py
 ```
-
-The snapshot includes probe history, process status, exit codes and the
-OOM indicator. Successful collection does not imply healthy services.
 
 For individual checks:
 
@@ -61,8 +56,11 @@ docker compose logs --tail=100
 curl -i --max-time 5 http://127.0.0.1:8088/health
 ```
 
+Use container status, logs and HTTP responses together to investigate a
+failure before making changes.
+
 See the [operations guide](docs/operations.md) for healthchecks, container
-restrictions, log rotation, recovery and diagnostic exit behavior.
+restrictions, log rotation and recovery procedures.
 
 ## Request correlation
 
@@ -80,8 +78,43 @@ Match the response header to the `request_id` in both logs.
 Direct application healthchecks bypass Nginx and have a null request ID.
 A proxy failure before reaching the application may have no application entry.
 
+To search for a specific request, replace the value below with its response ID:
+
+```bash
+REQUEST_ID='paste-the-32-character-request-id-here'
+python3 scripts/find_request.py "$REQUEST_ID"
+```
+
+The lookup also supports saved logs through `--stdin`.
+
 See the [logging guide](docs/logging.md) for field definitions,
 HTTP failure investigation and observed log-retrieval limitations.
+
+## Inspect proxy diagnostics
+
+See [how to read the CI summaries](docs/logging.md#read-the-two-summaries-in-github-actions)
+to understand the collected log window and the controlled slow-backend probe.
+
+Summarize recent Nginx logs locally:
+
+```bash
+(
+  set -e
+  set -o pipefail
+  docker compose logs --no-color --no-log-prefix --tail 100 nginx |
+    python3 scripts/summarize_proxy_logs.py > /tmp/lab-proxy-summary.json
+  python3 scripts/render_proxy_summary.py /tmp/lab-proxy-summary.json
+)
+```
+
+The report includes HTTP response counts, p95 and maximum request times,
+per-route timing data and routes returning HTTP 5xx.
+
+It also reports requests excluding `/health`, helping separate healthcheck
+traffic from other routes.
+
+These figures describe the collected sample. They can include deliberate
+test failures and do not represent production availability measurements.
 
 ## Automated tests
 
@@ -90,91 +123,106 @@ With the environment running:
 ```bash
 python3 tests/http_smoke.py
 python3 tests/test_access_logs.py
+python3 tests/test_live_request_lookup.py
 bash tests/test_shutdown.sh
 bash tests/test_recovery.sh
 bash tests/test_diagnostics.sh
 ```
 
-| Suite | Verifies |
-| --- | --- |
-| HTTP smoke | Application identity, health, query strings and unknown routes |
-| Access logs | Correlated IDs, JSON escaping, statuses, timestamps and upstream timings |
-| Shutdown | SIGTERM/SIGINT handling, exit code 0, OOM indicator and shutdown logs |
-| Recovery | HTTP failure and recovery, healthy containers and no Nginx restart |
-| Diagnostics | Success when healthy, failure with a stopped backend and success after restoration |
+The HTTP suite checks application identity, health responses, query strings
+and unknown routes through Nginx.
 
-Shutdown tests use isolated temporary containers that are removed afterward.
+The log suite checks correlation between response headers, proxy logs and
+application logs, including HTTP 404 responses. It also checks JSON escaping,
+distinct request IDs, timestamps and upstream timing fields.
 
-Recovery and diagnostic tests temporarily interrupt the current lab
-application. Their exit handlers attempt restoration after failures or
-interruptions. They cannot recover from every failure condition.
+The live lookup test verifies that the request lookup command finds matching
+Nginx and application records for a real HTTP request.
 
-See the [operations guide](docs/operations.md) for cleanup limitations
-and manual recovery.
+The shutdown suite creates isolated temporary containers and verifies
+SIGTERM and SIGINT handling, exit code 0, the OOM indicator and shutdown logs.
+Temporary containers are removed after testing.
+
+The recovery suite temporarily stops the lab application, expects HTTP
+502 or 504, restores the backend and reruns the HTTP checks. It also waits
+for both healthchecks and verifies that Nginx was neither restarted nor replaced.
+
+The diagnostic suite checks successful diagnostics, failure detection while
+the backend is stopped and successful diagnostics after recovery.
+
+Recovery and diagnostic tests interrupt the current lab. Their cleanup
+handlers attempt restoration if a test fails or is interrupted.
+See the [operations guide](docs/operations.md) for recovery procedures
+and cleanup limitations.
 
 ## Continuous integration
 
 [Lab Checks](https://github.com/Gabrieldelacerda/cloud-operations-lab/actions/workflows/lab-checks.yml)
 runs on pushes, pull requests and manual execution.
 
-The workflow validates shell syntax and Compose configuration, builds the
-environment, runs all five test suites and executes environment diagnostics.
+The workflow validates shell syntax and Compose configuration, tests the
+diagnostic tools, builds the environment and runs HTTP, log-correlation,
+recovery, diagnostic, shutdown and slow-backend checks.
 
-Before cleanup, it attempts to upload a
-`lab-diagnostics-<run-id>-<attempt>` artifact with seven-day retention:
-
-- `container-status.txt`: container states.
-- `compose.log`: latest 100 log lines per service.
-- `health-status.json`: service state and recent healthcheck history.
-
-Download the artifact from the workflow run's Summary page to investigate
-the environment after its containers are removed.
+Before cleanup, it collects container status, service logs and healthcheck
+history. Diagnostic artifacts use the name
+`lab-diagnostics-<run-id>-<attempt>` and have seven-day retention.
 
 Collection, upload and cleanup are attempted even after test failures.
-Runner loss or collection errors can prevent complete evidence from being saved.
+Download the artifact from the workflow run's Summary page to inspect the
+saved evidence after the containers are removed.
+
+The Actions job summary displays proxy response counts and timing data.
+A separate slow-backend summary preserves evidence from the controlled
+timeout before the default environment is restored.
 
 ![GitHub Actions recovery validation](screenshots/verifylab.png)
 
-## Incident investigation
+## Incident investigations
 
-[Incident 001: Backend unavailable](docs/incidents/001-backend-unavailable.md)
+### Incident 001: Backend unavailable
+
+[Read the investigation](docs/incidents/001-backend-unavailable.md).
 
 The original controlled outage produced HTTP 504 while Nginx remained running.
 Logs identified a connection timeout to the stopped backend. Starting the
 application restored HTTP 200 without restarting Nginx.
 
 The investigation also exposed slow shutdown, which led to explicit signal
-handling and automated shutdown tests. Backend outage, recovery and diagnostic
-failure detection are now tested locally and in CI.
+handling and automated shutdown tests.
+
+### Incident 002: Slow backend
+
+[Read the investigation](docs/incidents/002-slow-backend.md).
+
+Nginx connected to the backend but timed out waiting for response headers.
+The error log identified a read timeout, distinguishing it from the
+connection timeout in Incident 001.
 
 ## Reproduce a slow-backend timeout
 
-In [Incident 001](docs/incidents/001-backend-unavailable.md), Nginx timed out
-while connecting to the stopped backend. In
-[Incident 002](docs/incidents/002-slow-backend.md), Nginx connected but timed
-out waiting for response headers. Both incidents produced HTTP 504. The
-Nginx error log identifies which phase timed out.
-
-Run the slow-backend scenario in the local lab:
+Run only against the local lab:
 
 ```bash
 bash tests/test_slow_backend.sh
 ```
 
-The test enables the slow route, matches the 504 response to the Nginx logs
-and restores the default Compose configuration. In GitHub Actions, the
-diagnostics artifact includes the test output in `slow-backend.log`.
+The test verifies that `/lab/slow` returns HTTP 404 by default, enables the
+slow route through `compose.slow.yaml` and checks for HTTP 504.
 
-## Inspect proxy diagnostics
+It correlates the response with Nginx access and error logs, verifies that
+`/health` still responds and restores the default configuration.
 
-Open the GitHub Actions run summary for Nginx response counts and request
-timing. The diagnostics artifact includes `proxy-summary.json`, which also
-groups HTTP 5xx responses by route.
+The cleanup handler attempts restoration after failure or interruption.
+If restoration fails, run:
 
-The latency figures use Nginx's total request time and cover only the
-collected log window. Health checks and deliberate failures can appear in
-that sample. See the [logging guide](docs/logging.md#summarize-proxy-responses)
-to recreate the report locally or trace a single request by ID.
+```bash
+docker compose up -d --wait --wait-timeout 60
+python3 tests/http_smoke.py
+```
+
+Both documented incidents produced HTTP 504. The Nginx error log identifies
+which phase timed out.
 
 ## Evidence
 
@@ -201,5 +249,7 @@ docker compose down
 
 This is a local learning environment using Python's standard-library HTTP
 server. Recovery is explicitly performed by the test scripts; the lab does
-not implement automatic failover. Cloud infrastructure and additional
-incident scenarios are planned extensions.
+not implement automatic failover.
+
+Log summaries cover a limited collection window and include synthetic traffic.
+Cloud infrastructure and additional incident scenarios are planned extensions.
