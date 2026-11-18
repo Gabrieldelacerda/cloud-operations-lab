@@ -23,6 +23,25 @@ class RenderSlowBackendSummaryTests(unittest.TestCase):
             timeout=5,
         ).splitlines()
 
+    def test_reports_invalid_json_without_partial_output(self):
+        for payload in ("", '{"requests":'):
+            with self.subTest(payload=payload):
+                result = subprocess.run(
+                    [sys.executable, "-B", str(RENDERER)],
+                    input=payload,
+                    capture_output=True,
+                    text=True,
+                    timeout=5,
+                )
+                self.assertEqual(result.returncode, 1)
+                self.assertEqual(result.stdout, "")
+                self.assertIn(
+                    "Could not parse slow backend summary: invalid JSON",
+                    result.stderr,
+                )
+                self.assertIn("line 1, column", result.stderr)
+                self.assertNotIn("Traceback", result.stderr)
+
     def test_renders_a_504_with_the_observed_duration(self):
         lines = self.render(1, {"504": 1}, 1, 5.006)
 
