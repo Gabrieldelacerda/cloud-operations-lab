@@ -1,5 +1,50 @@
 import json
+import math
 import sys
+
+
+def validate_report(report):
+    if not isinstance(report, dict):
+        raise ValueError("the report must be a JSON object")
+
+    requests = report.get("requests")
+    if type(requests) is not int or requests < 0:
+        raise ValueError("requests must be a nonnegative integer")
+
+    statuses = report.get("statuses")
+    if not isinstance(statuses, dict):
+        raise ValueError("statuses must be an object")
+    for status, count in statuses.items():
+        if (
+            len(status) != 3
+            or not status.isascii()
+            or not status.isdigit()
+            or not 100 <= int(status) <= 599
+        ):
+            raise ValueError("statuses must use HTTP status codes as keys")
+        if type(count) is not int or count < 0:
+            raise ValueError("status counts must be nonnegative integers")
+    if sum(statuses.values()) != requests:
+        raise ValueError("status counts must add up to requests")
+
+    timing = report.get("request_time_seconds")
+    if not isinstance(timing, dict):
+        raise ValueError("request_time_seconds must be an object")
+
+    samples = timing.get("samples")
+    if type(samples) is not int or not 0 <= samples <= requests:
+        raise ValueError("timing samples must be between zero and requests")
+
+    maximum = timing.get("max")
+    if samples == 0:
+        if maximum is not None:
+            raise ValueError("maximum request time must be null without samples")
+    elif (
+        type(maximum) not in (int, float)
+        or maximum < 0
+        or not math.isfinite(maximum)
+    ):
+        raise ValueError("maximum request time must be a finite nonnegative number")
 
 
 def main():
@@ -11,6 +56,12 @@ def main():
             f"at line {error.lineno}, column {error.colno}.",
             file=sys.stderr,
         )
+        return 1
+
+    try:
+        validate_report(report)
+    except ValueError as error:
+        print(f"Invalid slow backend summary: {error}.", file=sys.stderr)
         return 1
 
     timing = report["request_time_seconds"]

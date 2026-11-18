@@ -42,6 +42,50 @@ class RenderSlowBackendSummaryTests(unittest.TestCase):
                 self.assertIn("line 1, column", result.stderr)
                 self.assertNotIn("Traceback", result.stderr)
 
+    def test_rejects_invalid_report_fields_without_partial_output(self):
+        valid = {
+            "requests": 1,
+            "statuses": {"504": 1},
+            "request_time_seconds": {"samples": 1, "max": 5.0},
+        }
+        reports = [
+            None,
+            [],
+            {},
+            dict(valid, requests=True),
+            dict(valid, requests=-1),
+            dict(valid, statuses=[]),
+            dict(valid, statuses={"invalid": 1}),
+            dict(valid, statuses={"504": -1}),
+            dict(valid, statuses={"504": True}),
+            dict(valid, statuses={"504": 2}),
+            dict(valid, request_time_seconds={}),
+        ]
+        for timing in (
+            {"samples": 2, "max": 5.0},
+            {"samples": True, "max": 5.0},
+            {"samples": 1, "max": "5.0"},
+            {"samples": 1, "max": -1},
+            {"samples": 1, "max": float("inf")},
+            {"samples": 1, "max": float("nan")},
+            {"samples": 0, "max": 5.0},
+        ):
+            reports.append(dict(valid, request_time_seconds=timing))
+
+        for report in reports:
+            with self.subTest(report=report):
+                result = subprocess.run(
+                    [sys.executable, "-B", str(RENDERER)],
+                    input=json.dumps(report),
+                    capture_output=True,
+                    text=True,
+                    timeout=5,
+                )
+                self.assertEqual(result.returncode, 1)
+                self.assertEqual(result.stdout, "")
+                self.assertIn("Invalid slow backend summary:", result.stderr)
+                self.assertNotIn("Traceback", result.stderr)
+
     def test_renders_a_504_with_the_observed_duration(self):
         lines = self.render(1, {"504": 1}, 1, 5.006)
 
