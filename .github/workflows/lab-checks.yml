@@ -67,6 +67,20 @@ jobs:
           mkdir -p artifacts
           bash tests/test_slow_backend.sh 2>&1 | tee artifacts/slow-backend.log
 
+      - name: Record runtime versions
+        if: always()
+        run: |
+          mkdir -p artifacts
+          {
+            printf 'Commit: '
+            git rev-parse HEAD
+            python3 --version
+            docker --version
+            docker compose version
+            docker version --format 'Docker Engine: {{.Server.Version}}'
+          } > artifacts/runtime-versions.txt
+          cat artifacts/runtime-versions.txt
+
       - name: Capture healthcheck history
         if: always()
         run: |
