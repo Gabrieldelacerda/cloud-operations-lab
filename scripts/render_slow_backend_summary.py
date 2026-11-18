@@ -1,6 +1,8 @@
+import argparse
 import json
 import math
 import sys
+from pathlib import Path
 
 
 def validate_report(report):
@@ -48,8 +50,27 @@ def validate_report(report):
 
 
 def main():
+    parser = argparse.ArgumentParser(
+        description="Render a slow-backend JSON summary as Markdown."
+    )
+    parser.add_argument(
+        "report", nargs="?", type=Path,
+        help="JSON report path; read stdin when omitted",
+    )
+    args = parser.parse_args()
+
     try:
-        report = json.load(sys.stdin)
+        source = (
+            args.report.read_text(encoding="utf-8")
+            if args.report is not None
+            else sys.stdin.read()
+        )
+    except (OSError, UnicodeError) as error:
+        print(f"Could not read slow backend summary: {error}", file=sys.stderr)
+        return 1
+
+    try:
+        report = json.loads(source)
     except json.JSONDecodeError as error:
         print(
             f"Could not parse slow backend summary: invalid JSON "

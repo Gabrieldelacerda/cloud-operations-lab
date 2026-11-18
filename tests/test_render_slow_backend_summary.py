@@ -1,6 +1,7 @@
 import json
 import subprocess
 import sys
+import tempfile
 import unittest
 from pathlib import Path
 
@@ -85,6 +86,42 @@ class RenderSlowBackendSummaryTests(unittest.TestCase):
                 self.assertEqual(result.stdout, "")
                 self.assertIn("Invalid slow backend summary:", result.stderr)
                 self.assertNotIn("Traceback", result.stderr)
+
+    def test_file_input_matches_stdin_output(self):
+        report = {
+            "requests": 1,
+            "statuses": {"504": 1},
+            "request_time_seconds": {"samples": 1, "max": 5.006},
+        }
+        payload = json.dumps(report)
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "slow backend summary.json"
+            path.write_text(payload, encoding="utf-8")
+            from_file = subprocess.run(
+                [sys.executable, "-B", str(RENDERER), str(path)],
+                capture_output=True, text=True, timeout=5,
+            )
+            from_stdin = subprocess.run(
+                [sys.executable, "-B", str(RENDERER)],
+                input=payload, capture_output=True, text=True, timeout=5,
+            )
+
+        self.assertEqual(from_file.returncode, 0, from_file.stderr)
+        self.assertEqual(from_stdin.returncode, 0, from_stdin.stderr)
+        self.assertEqual(from_file.stdout, from_stdin.stdout)
+
+    def test_reports_missing_file_without_a_traceback(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "missing.json"
+            result = subprocess.run(
+                [sys.executable, "-B", str(RENDERER), str(path)],
+                capture_output=True, text=True, timeout=5,
+            )
+
+        self.assertEqual(result.returncode, 1)
+        self.assertEqual(result.stdout, "")
+        self.assertIn("Could not read slow backend summary:", result.stderr)
+        self.assertNotIn("Traceback", result.stderr)
 
     def test_renders_a_504_with_the_observed_duration(self):
         lines = self.render(1, {"504": 1}, 1, 5.006)
