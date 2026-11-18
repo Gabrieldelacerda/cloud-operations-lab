@@ -34,8 +34,10 @@ jobs:
       - name: Test offline diagnostic tools
         run: bash scripts/test_tools.sh
 
-      - name: Validate Compose configuration
-        run: docker compose config --quiet
+      - name: Validate Compose configurations
+        run: |
+          docker compose config --quiet
+          docker compose -f compose.yaml -f compose.slow.yaml config --quiet
 
       - name: Build and start the environment
         run: docker compose up -d --build --wait --wait-timeout 60
