@@ -111,7 +111,9 @@ jobs:
       - name: Show slow backend probe results in the run summary
         if: ${{ always() && hashFiles('artifacts/slow-backend-summary.json') != '' }}
         run: |
-          python3 scripts/render_slow_backend_summary.py < artifacts/slow-backend-summary.json >> "$GITHUB_STEP_SUMMARY"
+          report=$(python3 scripts/render_slow_backend_summary.py < artifacts/slow-backend-summary.json)
+          printf '%s\n' "$report" > artifacts/slow-backend-summary.md
+          cat artifacts/slow-backend-summary.md >> "$GITHUB_STEP_SUMMARY"
 
       - name: Upload container diagnostics
         if: always()
