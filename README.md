@@ -118,6 +118,9 @@ test failures and do not represent production availability measurements.
 
 ## Automated tests
 
+See the [testing guide](docs/testing.md) to choose between offline tool
+checks, live HTTP checks and scenarios that temporarily interrupt the lab.
+
 With the environment running:
 
 ```bash
